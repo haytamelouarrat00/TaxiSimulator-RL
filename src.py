@@ -1,4 +1,5 @@
 import pygame
+import random
 
 
 class BLOCK:
@@ -19,6 +20,7 @@ class BLOCK:
         return pygame.Rect(self.pos[0], self.pos[1], self.width, self.height)
 
 
+
 class TAXI:
     def __init__(self, screen, x, y, width, height):
         self.screen = screen
@@ -28,6 +30,7 @@ class TAXI:
         self.height = height
         self.color = (255, 0, 0)  # Red
         self.speed = 5  # Speed of the taxi
+        self.orientation = "vertical"  # Initial orientation
 
     def draw_taxi(self):
         pygame.draw.rect(
@@ -35,15 +38,72 @@ class TAXI:
             (self.x, self.y, self.width, self.height)
         )
 
-    def move(self, dx, dy):
-        """Move the taxi by a given amount."""
-        self.x += dx
-        self.y += dy
+    def move(self, dx, dy, blocks):
+        """Move the taxi by a given amount, preventing collisions and staying within screen boundaries."""
+        # Predict the new position
+        new_rect = self.get_rect()
+        new_rect.x += dx
+        new_rect.y += dy
+
+        # Check for collision with blocks
+        for block in blocks:
+            if new_rect.colliderect(block.get_rect()):
+                print("Collision detected! Can't move.")
+                return  # Prevent movement if a collision is detected
+
+        # Check for screen boundaries
+        if new_rect.left < 0 or new_rect.right > self.screen.get_width() or new_rect.top < 0 or new_rect.bottom > self.screen.get_height():
+            print("Out of screen boundaries! Can't move.")
+            return  # Prevent movement if out of screen boundaries
+
+        # Handle turning and reverse mechanics
+        if self.orientation == "vertical" and dx != 0:
+            self.turn()
+            self.x -= dx  # Reverse movement
+        elif self.orientation == "horizontal" and dy != 0:
+            self.turn()
+            self.y -= dy  # Reverse movement
+        else:
+            self.x += dx
+            self.y += dy
+
+    def turn(self):
+        """Turn the car by swapping width and height."""
+        self.width, self.height = self.height, self.width
+        self.orientation = (
+            "horizontal" if self.orientation == "vertical" else "vertical"
+        )
 
     def get_rect(self):
         """Get the rectangle representing the taxi."""
         return pygame.Rect(self.x, self.y, self.width, self.height)
 
+class CUSTOMER:
+    def __init__(self, screen, blocks):
+        self.screen = screen
+        self.color = (0, 255, 0)  # Green
+        self.radius = 5
+        self.x, self.y = self.get_random_position(blocks)
+
+    def get_random_position(self, blocks):
+        """Generate a random position on the edge of a random block."""
+        block = random.choice(blocks)  # Select a random block
+        block_rect = block.get_rect()
+
+        # Randomly choose one edge: top, bottom, left, or right
+        edge = random.choice(["top", "bottom", "left", "right"])
+        if edge == "top":
+            return random.randint(block_rect.left, block_rect.right), block_rect.top
+        elif edge == "bottom":
+            return random.randint(block_rect.left, block_rect.right), block_rect.bottom
+        elif edge == "left":
+            return block_rect.left, random.randint(block_rect.top, block_rect.bottom)
+        else:  # "right"
+            return block_rect.right, random.randint(block_rect.top, block_rect.bottom)
+
+    def draw_customer(self):
+        """Draw the customer as a green circle."""
+        pygame.draw.circle(self.screen, self.color, (self.x, self.y), self.radius)
 
 class MAP:
     WIDTH = 800
@@ -57,7 +117,7 @@ class MAP:
         self.clock = pygame.time.Clock()
 
         # Initialize the taxi
-        self.taxi = TAXI(self.window, 4, 9, 17, 26)
+        self.taxi = TAXI(self.window, 4, 9, 12, 21)
 
     def draw_lines(self):
         YELLOW = (255, 255, 0)
@@ -131,6 +191,8 @@ class MAP:
             BLOCK(self.window, 150, 50, (700, 400))
         ]
 
+        customer = CUSTOMER(self.window, blocks)
+
         running = True
 
         # Movement variables
@@ -158,11 +220,8 @@ class MAP:
                     if event.key in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_a, pygame.K_d):
                         move_x = 0
 
-            # Move the taxi
-            self.taxi.move(move_x, move_y)
-
-            # Check for collisions
-            self.check_collision(blocks)
+            # Move the taxi, passing the blocks for collision detection
+            self.taxi.move(move_x, move_y, blocks)
 
             # Fill the screen with a background color
             self.window.fill((72, 115, 146))
@@ -174,6 +233,8 @@ class MAP:
             # Draw the yellow lines
             self.draw_lines()
 
+            customer.draw_customer()
+
             # Draw the taxi
             self.taxi.draw_taxi()
 
@@ -184,7 +245,6 @@ class MAP:
             self.clock.tick(self.FPS)
 
         pygame.quit()
-
 
 if __name__ == "__main__":
     # Create a MAP instance and run the game
